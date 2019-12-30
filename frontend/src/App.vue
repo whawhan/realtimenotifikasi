@@ -1,32 +1,177 @@
 <template>
-  <div id="app">
-    <div id="nav">
-      <router-link to="/">Home</router-link> |
-      <router-link to="/about">About</router-link>
+  <div class="container">
+    <div class="flex justify-between">
+      <div>
+        <h1>Send Notification</h1>
+        <p>
+          Me <input type="text" v-model="me" />
+        </p>
+        <p>
+          To <input type="text" v-model="to" />
+        </p>
+        <p>
+          Message <input type="text" v-model="message" />
+        </p>
+        <button @click="privateMessage">Send Message Private</button>
+        <button @click="sendMessage">Send Message All</button>
+        <button @click="addChat">Save Message</button>
+
+        <p>
+          <ul>
+            <li v-for="(msg, i) in incomingMessages" :key="i">
+              {{ msg.name }}
+              {{ msg.message }}
+            </li>
+          </ul>
+          <ul>
+            <li v-for="(msg, i) in incomingPrivateMessages" :key="i">
+              {{ msg.name }}
+              {{ msg.message }}
+            </li>
+          </ul>
+        </p>
+      </div>
     </div>
-    <router-view/>
   </div>
 </template>
 
-<style>
-#app {
-  font-family: 'Avenir', Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-}
+<script>
+import axios from 'axios'
+import { Notyf } from 'notyf';
+import 'notyf/notyf.min.css';
 
-#nav {
-  padding: 30px;
-}
+export default {
 
-#nav a {
-  font-weight: bold;
-  color: #2c3e50;
-}
+  data: () => ({
+    notifier: new Notyf(),
+    me: 'person1',
+    to: 'person2',
+    message: 'Hello',
+    incomingMessages: [],
+    incomingPrivateMessages: [],
+    connection: null,
+  }),
 
-#nav a.router-link-exact-active {
-  color: #42b983;
+  mounted() {
+    this.registerWS()
+  },
+
+  methods: {
+    sendMessage() {
+      const data = JSON.stringify({
+        to: this.to,
+        message: this.message,
+      })
+
+      this.connection.send(data)
+    },
+
+    privateMessage() {
+      const data = JSON.stringify({
+        private: true,
+        from: this.me,
+        to: this.to,
+        message: this.message,
+      })
+
+      const payload = {
+        name: this.me,
+        date: (new Date).toISOString(),
+        message: this.message
+      }
+
+      this.incomingPrivateMessages.unshift(payload)
+
+      this.connection.send(data)
+    },
+
+    registerWS() {
+      const url = 'ws://localhost:8000'
+      this.connection = new WebSocket(url)
+
+      this.connection.onopen = event => {
+        console.log('We are connected', event)
+      }
+
+      this.connection.onerror = error => {
+        console.log(`WebSocket error: ${error}`)
+      }
+
+      this.connection.onmessage = event => {
+        const data = JSON.parse(event.data)
+
+        // console.log(data)
+
+        if (data.private && data.to === this.me) {
+          const payload = {
+            name: data.from,
+            date: (new Date).toISOString(),
+            message: data.message
+          }
+
+          this.incomingPrivateMessages.unshift(payload)
+
+          this.notifier.success(data.message);
+        } else if (!data.private) {
+          const payload = {
+            name: data.from,
+            date: (new Date).toISOString(),
+            message: data.message
+          }
+
+          this.incomingMessages.unshift(payload)
+
+          this.notifier.success(data.message);
+        }
+      }
+    },
+
+    async addChat() {
+            const backend='http://localhost:4001/chat/'
+            const payload = {
+                me: this.me,
+                to: this.to,
+                message: this.message,
+            }
+            
+            const response = await axios.post(backend+'addChat', payload)            
+            this.items.push({
+                me: this.me,
+                to: this.to,
+                message: this.message,
+            })
+
+            this.me = ''
+            this.yo = ''
+            this.message = ''
+            // this.getList()
+
+        },
+  },
+
+
+
+
+
+
+
+
+
+
+
+  
+}
+</script>
+
+<style scoped>
+.container {
+  margin: auto;
+  width: 800px;
+}
+.flex {
+    display: flex;
+}
+.justify-between {
+    justify-content: space-between;
 }
 </style>
